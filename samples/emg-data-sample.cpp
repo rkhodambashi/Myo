@@ -9,9 +9,25 @@
 #include <stdexcept>
 #include <string>
 #include <fstream>
+#include <time.h>
+#include <ctime>
+#include <stack>
 
 #include <myo/myo.hpp>
 using namespace std;
+
+// Helper function for textual date and time.
+// TMSZ must allow extra character for the null terminator.
+
+#define TMFMT "        %H:%M:%S "
+#define TMSZ 18
+static char *getTm(char *buff) {
+	time_t t = time(0);
+	strftime(buff, TMSZ, TMFMT, localtime(&t));
+	return buff;
+}
+std::stack<clock_t> tictoc_stack;
+
 class DataCollector : public myo::DeviceListener {
 public:
 	DataCollector()
@@ -22,6 +38,17 @@ public:
 
 	~DataCollector() {
 		myfile.close();
+	}
+
+	void tic() {
+		tictoc_stack.push(clock());
+	}
+
+	void toc() {
+		std::cout << "Time elapsed: "
+			<< ((double)(clock() - tictoc_stack.top())) / CLOCKS_PER_SEC
+			<< std::endl;
+		tictoc_stack.pop();
 	}
 
 	// onUnpair() is called whenever the Myo is disconnected from Myo Connect by the user.
@@ -47,6 +74,7 @@ public:
 	void print()
 	{
 		int count = 0;
+		char buff[TMSZ];
 		// Clear the current line
 		std::cout << '\r';
 
@@ -56,14 +84,19 @@ public:
 			oss << static_cast<int>(emgSamples[i]);
 			std::string emgString = oss.str();
 
+
 			std::cout << '[' << emgString << std::string(4 - emgString.size(), ' ') << ']';
 			
 			//myfile<<endl;
 			//myfile << '[' << emgString << std::string(4 - emgString.size(), ' ') << ']'; 
 			myfile << emgString << ' ';
 			count++;
-        }myfile<<endl;
-			
+        }
+		myfile << "Time elapsed: "
+			<< ((double)(clock() - tictoc_stack.top())) / CLOCKS_PER_SEC;
+		tictoc_stack.pop();
+		myfile<<endl;
+	
         std::cout << std::flush;
     }
 
@@ -112,14 +145,13 @@ int main(int argc, char** argv)
 
     // Finally we enter our main loop.
     while (1) {
+		collector.tic();
         // In each iteration of our main loop, we run the Myo event loop for a set number of milliseconds.
         // In this case, we wish to update our display 50 times a second, so we run for 1000/20 milliseconds.
-        hub.run(1000/20);
+        hub.run(1000/100);
         // After processing events, we call the print() member function we defined above to print out the values we've
         // obtained from any events that have occurred.
         collector.print();
-		
-
 		/*ofstream myfile;
 		myfile.open("example.txt");
 		myfile << "emgSamples";
